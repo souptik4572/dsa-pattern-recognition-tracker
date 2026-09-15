@@ -77,6 +77,11 @@ web_modules/
 # Next.js build output
 .next
 out
+next-env.d.ts
+.vercel
+
+# Prisma generated client (rebuilt by `prisma generate` on install)
+/src/generated/
 
 # Nuxt.js build / generate output
 .nuxt

@@ -1,0 +1,140 @@
+@import "tailwindcss";
+
+/*
+ * Design tokens. The status and mastery colours were checked for contrast and
+ * colour-vision separation against the card surface in both light and dark mode;
+ * every status mark also ships with a text label, so colour never carries meaning alone.
+ */
+:root {
+  color-scheme: light;
+  --paper: #edf0f3;
+  --card: #ffffff;
+  --card-hover: #f6f8fa;
+  --ink: #121415;
+  --ink-2: #4a5a69;
+  --ink-3: #5f6f7e;
+  --rule: #d6dde4;
+  --rule-soft: #edf1f4;
+  --grid-line: #e1e6eb;
+  --accent: #1d4e89;
+  --accent-soft: #e4ebf3;
+  --danger: #b3261e;
+  --danger-soft: #fbedec;
+  --success: #17684a;
+
+  --status-none: #cfd7df;
+  --status-help: #c93f36;
+  --status-slow: #cc8400;
+  --status-clean: #1d8a5e;
+
+  --easy: #00756b;
+  --medium: #975c00;
+  --hard: #b01f3e;
+
+  --mastery-0: #dde3e9;
+  --mastery-1: #86b6ef;
+  --mastery-2: #3987e5;
+  --mastery-3: #1c5cab;
+  --mastery-4: #0d366b;
+}
+
+@media (prefers-color-scheme: dark) {
+  :root {
+    color-scheme: dark;
+    --paper: #0e1114;
+    --card: #16191d;
+    --card-hover: #1c2025;
+    --ink: #e6eaee;
+    --ink-2: #aab5bf;
+    --ink-3: #8b98a5;
+    --rule: #2b3137;
+    --rule-soft: #1f2429;
+    --grid-line: #14181c;
+    --accent: #7fb0ec;
+    --accent-soft: #1a2a3c;
+    --danger: #f2877e;
+    --danger-soft: #3a1d1b;
+    --success: #4cc79a;
+
+    --status-none: #333a42;
+    --status-help: #e0567a;
+    --status-slow: #bf8a00;
+    --status-clean: #26a07a;
+
+    --easy: #3cc3b4;
+    --medium: #e0a34a;
+    --hard: #f0708c;
+
+    --mastery-0: #262c33;
+    --mastery-1: #184f95;
+    --mastery-2: #2a78d6;
+    --mastery-3: #6da7ec;
+    --mastery-4: #b7d3f6;
+  }
+}
+
+@theme inline {
+  --color-paper: var(--paper);
+  --color-card: var(--card);
+  --color-card-hover: var(--card-hover);
+  --color-ink: var(--ink);
+  --color-ink-2: var(--ink-2);
+  --color-ink-3: var(--ink-3);
+  --color-rule: var(--rule);
+  --color-rule-soft: var(--rule-soft);
+  --color-accent: var(--accent);
+  --color-accent-soft: var(--accent-soft);
+  --color-danger: var(--danger);
+  --color-danger-soft: var(--danger-soft);
+  --color-success: var(--success);
+
+  --color-status-none: var(--status-none);
+  --color-status-help: var(--status-help);
+  --color-status-slow: var(--status-slow);
+  --color-status-clean: var(--status-clean);
+
+  --color-easy: var(--easy);
+  --color-medium: var(--medium);
+  --color-hard: var(--hard);
+
+  --color-mastery-0: var(--mastery-0);
+  --color-mastery-1: var(--mastery-1);
+  --color-mastery-2: var(--mastery-2);
+  --color-mastery-3: var(--mastery-3);
+  --color-mastery-4: var(--mastery-4);
+
+  --font-sans: var(--font-inter), ui-sans-serif, system-ui, -apple-system, "Segoe UI", sans-serif;
+  --font-mono: var(--font-jetbrains-mono), ui-monospace, "SF Mono", Menlo, Consolas, monospace;
+}
+
+@layer base {
+  body {
+    background-color: var(--paper);
+    background-image:
+      linear-gradient(var(--grid-line) 1px, transparent 1px),
+      linear-gradient(90deg, var(--grid-line) 1px, transparent 1px);
+    background-size: 28px 28px;
+    background-position: -1px -1px;
+    color: var(--ink);
+    font-family: var(--font-sans);
+    -webkit-font-smoothing: antialiased;
+  }
+
+  :focus-visible {
+    outline: 2px solid var(--accent);
+    outline-offset: 2px;
+  }
+
+  a {
+    text-underline-offset: 2px;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  *,
+  *::before,
+  *::after {
+    transition: none !important;
+    animation: none !important;
+  }
+}

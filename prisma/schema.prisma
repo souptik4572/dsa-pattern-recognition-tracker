@@ -1,0 +1,193 @@
+generator client {
+  provider = "prisma-client"
+  output   = "../src/generated/prisma"
+}
+
+datasource db {
+  provider = "postgresql"
+}
+
+// Hosted on Supabase. Any migration that creates a table must also run
+//   ALTER TABLE "<table>" ENABLE ROW LEVEL SECURITY;
+// so Supabase's public Data API can't read it. See prisma/migrations/*_lock_down_data_api.
+
+// ---------------------------------------------------------------------------
+// Authentication — shape required by Better Auth (core + admin plugin).
+// ---------------------------------------------------------------------------
+
+model User {
+  id            String         @id
+  name          String
+  email         String         @unique
+  emailVerified Boolean        @default(false)
+  image         String?
+  role          String?        @default("user")
+  banned        Boolean?       @default(false)
+  banReason     String?
+  banExpires    DateTime?
+  createdAt     DateTime       @default(now())
+  updatedAt     DateTime       @updatedAt
+  sessions      Session[]
+  accounts      Account[]
+  progress      UserProgress[]
+
+  @@map("users")
+}
+
+model Session {
+  id             String   @id
+  expiresAt      DateTime
+  token          String   @unique
+  createdAt      DateTime @default(now())
+  updatedAt      DateTime @updatedAt
+  ipAddress      String?
+  userAgent      String?
+  impersonatedBy String?
+  userId         String
+  user           User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([userId])
+  @@map("sessions")
+}
+
+model Account {
+  id                    String    @id
+  accountId             String
+  providerId            String
+  userId                String
+  user                  User      @relation(fields: [userId], references: [id], onDelete: Cascade)
+  accessToken           String?
+  refreshToken          String?
+  idToken               String?
+  accessTokenExpiresAt  DateTime?
+  refreshTokenExpiresAt DateTime?
+  scope                 String?
+  password              String?
+  createdAt             DateTime  @default(now())
+  updatedAt             DateTime  @updatedAt
+
+  @@index([userId])
+  @@map("accounts")
+}
+
+model Verification {
+  id         String   @id
+  identifier String
+  value      String
+  expiresAt  DateTime
+  createdAt  DateTime @default(now())
+  updatedAt  DateTime @updatedAt
+
+  @@index([identifier])
+  @@map("verifications")
+}
+
+model RateLimit {
+  id          String @id
+  key         String @unique
+  count       Int
+  lastRequest BigInt
+
+  @@map("rate_limits")
+}
+
+// ---------------------------------------------------------------------------
+// Pattern sheet — seeded from prisma/data/sheet.json.
+// ---------------------------------------------------------------------------
+
+enum Difficulty {
+  EASY
+  MEDIUM
+  HARD
+}
+
+enum Tier {
+  CORE
+  REP
+  BOSS
+}
+
+/// A missing UserProgress row means the problem has not been started.
+enum ProgressStatus {
+  NEEDED_HELP
+  SOLVED_SLOW
+  SOLVED_CLEAN
+}
+
+model Family {
+  /// Two-digit family number from the sheet, e.g. "01".
+  id       String    @id
+  position Int       @unique
+  name     String
+  why      String
+  patterns Pattern[]
+
+  @@map("families")
+}
+
+model Pattern {
+  /// Pattern number from the sheet, e.g. "1.1".
+  id         String           @id
+  /// URL-safe form of the id, e.g. "1-1".
+  slug       String           @unique
+  position   Int              @unique
+  familyId   String
+  family     Family           @relation(fields: [familyId], references: [id], onDelete: Cascade)
+  name       String
+  trigger    String
+  template   String
+  complexity String
+  slots      PatternProblem[]
+
+  @@index([familyId])
+  @@map("patterns")
+}
+
+model Problem {
+  /// LeetCode problem number.
+  id               Int              @id
+  title            String
+  difficulty       Difficulty
+  leetcodeUrl      String
+  videoUrl         String?
+  codeUrl          String
+  videoSearchQuery String
+  slots            PatternProblem[]
+
+  @@index([difficulty])
+  @@map("problems")
+}
+
+/// A problem placed under a pattern. Progress is tracked per slot, so the same
+/// problem can be green under one pattern and untouched under another.
+model PatternProblem {
+  /// "<patternId>:<problemId>" — identical to the original tracker's storage key.
+  id        String         @id
+  position  Int            @unique
+  patternId String
+  pattern   Pattern        @relation(fields: [patternId], references: [id], onDelete: Cascade)
+  problemId Int
+  problem   Problem        @relation(fields: [problemId], references: [id], onDelete: Cascade)
+  tier      Tier
+  progress  UserProgress[]
+
+  @@unique([patternId, problemId])
+  @@index([problemId])
+  @@index([tier])
+  @@map("pattern_problems")
+}
+
+model UserProgress {
+  userId    String
+  user      User           @relation(fields: [userId], references: [id], onDelete: Cascade)
+  slotId    String
+  slot      PatternProblem @relation(fields: [slotId], references: [id], onDelete: Cascade)
+  status    ProgressStatus
+  createdAt DateTime       @default(now())
+  updatedAt DateTime       @updatedAt
+
+  @@id([userId, slotId])
+  @@index([userId, status])
+  @@index([slotId])
+  @@map("user_progress")
+}
