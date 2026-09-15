@@ -15,6 +15,7 @@ import { Panel } from "@/components/ui/panel";
 import { formatRelativeTime } from "@/lib/format";
 import { emptyCounts, masteryLevel, percent } from "@/lib/progress/stats";
 import { STATUS_LABEL } from "@/lib/progress/status";
+import { patternHref } from "@/lib/sheet/ids";
 import { DIFFICULTIES, DIFFICULTY_LABEL, TIER_LABEL, TIERS } from "@/lib/sheet/meta";
 import { sheetHref, parseSheetParams } from "@/lib/sheet/search-params";
 import { requireUser } from "@/server/auth";
@@ -159,7 +160,7 @@ export default async function DashboardPage() {
         description="One cell per pattern, one row per family. Darker means more of the pattern is solved."
         action={
           <Link href="/patterns" className="font-mono text-xs text-accent hover:underline">
-            Table view →
+            All patterns →
           </Link>
         }
         className="mt-4"
@@ -232,7 +233,7 @@ export default async function DashboardPage() {
                     <p className="truncate text-sm font-medium">{item.problem.title}</p>
                     <p className="truncate text-xs text-ink-3">
                       {STATUS_LABEL[item.status]} · {formatRelativeTime(item.updatedAt)} ·{" "}
-                      <Link href={`/patterns/${item.pattern.slug}`} className="hover:text-accent">
+                      <Link href={patternHref(item.pattern.id)} className="hover:text-accent">
                         {item.pattern.id} {item.pattern.name}
                       </Link>
                     </p>
@@ -269,7 +270,7 @@ function NextUpPanel({ nextUp }: { nextUp: NextUp }) {
         {row.problem.title}
         <ExternalLink aria-hidden className="mt-1.5 size-3.5 shrink-0 text-ink-3" />
       </a>
-      <Link href={`/patterns/${row.pattern.slug}`} className="mt-1 block text-sm text-accent hover:underline">
+      <Link href={patternHref(row.pattern.id)} className="mt-1 block text-sm text-accent hover:underline">
         {row.pattern.id} {row.pattern.name}
       </Link>
       <div className="mt-3 flex flex-wrap items-center gap-2">

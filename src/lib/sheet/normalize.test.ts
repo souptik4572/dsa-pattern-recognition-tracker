@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { patternIdFromSlug, patternSlug, slotId } from "./ids";
+import { patternAnchor, patternHref, patternIdFromSlug, patternSlug, slotId } from "./ids";
 import { normalizeSheet, rawSheetSchema, type RawSheet } from "./normalize";
 
 const problem = (n: number, overrides: Partial<RawSheet["families"][number]["patterns"][number]["probs"][number]> = {}) => ({
@@ -98,5 +98,10 @@ describe("ids", () => {
     expect(patternSlug("10.2")).toBe("10-2");
     expect(patternIdFromSlug("10-2")).toBe("10.2");
     expect(slotId("1.1", 167)).toBe("1.1:167");
+  });
+
+  it("links to a pattern's panel on the patterns page", () => {
+    expect(patternAnchor("10.2")).toBe("pattern-10-2");
+    expect(patternHref("10.2")).toBe("/patterns?open=10.2#pattern-10-2");
   });
 });

@@ -2,12 +2,21 @@ import Link from "next/link";
 import { StatusSelect } from "@/components/status-select";
 import { DifficultyBadge, TierBadge } from "@/components/ui/badges";
 import { cn } from "@/lib/cn";
-import type { SheetRow } from "@/server/sheet";
+import { patternHref } from "@/lib/sheet/ids";
+import type { ProblemRow } from "@/lib/sheet/rows";
 import { SolutionLinks } from "./solution-links";
 
 const th = "px-2 py-2.5 font-semibold";
 
-export function ProblemTable({ rows, showPattern = true, caption }: { rows: SheetRow[]; showPattern?: boolean; caption: string }) {
+export function ProblemTable({
+  rows,
+  showPattern = true,
+  caption,
+}: {
+  rows: ProblemRow[];
+  showPattern?: boolean;
+  caption: string;
+}) {
   return (
     <div className="overflow-x-auto rounded border border-rule bg-card">
       <table className={cn("w-full border-collapse text-sm", showPattern ? "min-w-[860px]" : "min-w-[680px]")}>
@@ -58,14 +67,18 @@ export function ProblemTable({ rows, showPattern = true, caption }: { rows: Shee
               </td>
               {showPattern && (
                 <td className="max-w-[18rem] px-2 py-2">
-                  <Link
-                    href={`/patterns/${row.pattern.slug}`}
-                    title={row.pattern.name}
-                    className="block truncate text-ink-2 hover:text-accent"
-                  >
-                    <span className="font-mono text-xs font-semibold text-accent">{row.pattern.id}</span> {row.pattern.name}
-                  </Link>
-                  <span className="block truncate text-xs text-ink-3">{row.pattern.familyName}</span>
+                  {row.pattern && (
+                    <>
+                      <Link
+                        href={patternHref(row.pattern.id)}
+                        title={row.pattern.name}
+                        className="block truncate text-ink-2 hover:text-accent"
+                      >
+                        <span className="font-mono text-xs font-semibold text-accent">{row.pattern.id}</span> {row.pattern.name}
+                      </Link>
+                      <span className="block truncate text-xs text-ink-3">{row.pattern.familyName}</span>
+                    </>
+                  )}
                 </td>
               )}
               <td className="px-2 py-2">

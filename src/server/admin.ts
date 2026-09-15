@@ -21,17 +21,20 @@ export async function listUsers({ q, page }: { q: string; page: number }) {
     ? { OR: [{ email: { contains: q, mode: "insensitive" } }, { name: { contains: q, mode: "insensitive" } }] }
     : {};
 
-  const total = await db.user.count({ where });
+  const findPage = (target: number) =>
+    db.user.findMany({
+      where,
+      orderBy: { createdAt: "desc" },
+      skip: (target - 1) * ADMIN_PAGE_SIZE,
+      take: ADMIN_PAGE_SIZE,
+      select: { id: true, name: true, email: true, role: true, banned: true, banReason: true, createdAt: true },
+    });
+
+  // Count and page in parallel; only an out-of-range page (stale link) costs a second fetch.
+  const [total, requested] = await Promise.all([db.user.count({ where }), findPage(page)]);
   const pageCount = Math.max(1, Math.ceil(total / ADMIN_PAGE_SIZE));
   const currentPage = Math.min(page, pageCount);
-
-  const users = await db.user.findMany({
-    where,
-    orderBy: { createdAt: "desc" },
-    skip: (currentPage - 1) * ADMIN_PAGE_SIZE,
-    take: ADMIN_PAGE_SIZE,
-    select: { id: true, name: true, email: true, role: true, banned: true, banReason: true, createdAt: true },
-  });
+  const users = currentPage === page ? requested : await findPage(currentPage);
 
   const ids = users.map((user) => user.id);
   const [tracked, solved] = await Promise.all([

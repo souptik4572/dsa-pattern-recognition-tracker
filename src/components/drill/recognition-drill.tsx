@@ -8,6 +8,7 @@ import { Select } from "@/components/ui/field";
 import { Eyebrow } from "@/components/ui/panel";
 import { cn } from "@/lib/cn";
 import { buildQuestion, type DrillPattern, type DrillQuestion } from "@/lib/drill";
+import { patternHref } from "@/lib/sheet/ids";
 
 type Score = { correct: number; answered: number; streak: number; best: number };
 
@@ -158,7 +159,7 @@ export function RecognitionDrill({
                 <span className="text-ink-2">
                   It&apos;s {question.answer.id} from {question.answer.familyName}.{" "}
                 </span>
-                <Link href={`/patterns/${question.answer.slug}`} className="text-accent hover:underline">
+                <Link href={patternHref(question.answer.id)} className="text-accent hover:underline">
                   Study this pattern →
                 </Link>
               </>

@@ -17,8 +17,10 @@ and code solutions.
 - **Progress metrics** (`/dashboard`, `/patterns`). Solved and pending counts overall and by
   pattern, family, tier and difficulty, plus a pattern mastery grid, what's due for a revisit, and
   a "next up" suggestion.
-- **Pattern pages** (`/patterns/[slug]`). The trigger, template, complexity and problems for one
-  pattern.
+- **Patterns** (`/patterns`). Every pattern, grouped by family. Open a pattern in place to see its
+  trigger, template, complexity, progress and problems. The sheet's problem filters (search,
+  family, difficulty, tier, status) apply inside every pattern, and links from the dashboard, sheet
+  and drill open the right pattern directly.
 - **Recognition drill** (`/drill`). Read a trigger and name the pattern, across the whole sheet
   or within a single family.
 - **Progress export and import.** JSON export, and import from either an export file or the
@@ -157,6 +159,20 @@ prisma/
   migrations/            includes the Supabase Data API lockdown
   data/sheet.json        sheet data extracted from the original HTML
 ```
+
+**Performance.** Every query is a network round trip to Supabase, so the data layer keeps them few:
+
+- The sheet is the same for every user, so it's loaded once per server instance and held in memory
+  (`src/server/catalog.ts`). It reloads every 10 minutes, so a reseed shows up without a restart.
+- A signed-in page then runs two small queries to validate the session and one for the user's own
+  statuses.
+- Stats, "next up", recent activity, and the sheet's filtering, sorting and pagination are computed
+  on the server from that data (`src/lib/sheet/query.ts`, `src/lib/progress/*`). Only the requested
+  page is sent to the browser.
+- The main tabs have `loading.tsx` skeletons, so a click shows feedback immediately. `/admin`
+  deliberately has none, because streaming would turn its 403 response into a 200.
+- Opening a pattern on `/patterns` needs no server round trip. Its problems arrive with the page,
+  and they're only rendered once the pattern is opened.
 
 **Authorization** is layered:
 

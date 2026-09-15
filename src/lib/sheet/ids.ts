@@ -10,3 +10,13 @@ export function patternSlug(patternId: string): string {
 export function patternIdFromSlug(slug: string): string {
   return slug.replace("-", ".");
 }
+
+/** DOM id of a pattern's panel on /patterns, used as the link fragment. */
+export function patternAnchor(patternId: string): string {
+  return `pattern-${patternSlug(patternId)}`;
+}
+
+/** Opens a pattern's problem list on /patterns and scrolls to it. */
+export function patternHref(patternId: string): string {
+  return `/patterns?open=${patternId}#${patternAnchor(patternId)}`;
+}

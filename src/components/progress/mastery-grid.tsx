@@ -4,6 +4,7 @@ import Link from "next/link";
 import { useState } from "react";
 import { cn } from "@/lib/cn";
 import { MASTERY_LABEL, type MasteryLevel } from "@/lib/progress/stats";
+import { patternHref } from "@/lib/sheet/ids";
 
 export type MasteryCell = {
   id: string;
@@ -47,7 +48,7 @@ export function MasteryGrid({ rows }: { rows: MasteryRow[] }) {
               {family.patterns.map((cell) => (
                 <Link
                   key={cell.id}
-                  href={`/patterns/${cell.slug}`}
+                  href={patternHref(cell.id)}
                   aria-label={`${cell.id} ${cell.name}: ${cell.solved} of ${cell.total} solved, ${cell.pending} pending`}
                   onPointerEnter={() => setActive(cell)}
                   onPointerLeave={() => setActive(null)}
@@ -71,7 +72,7 @@ export function MasteryGrid({ rows }: { rows: MasteryRow[] }) {
             <b className="text-ink tabular-nums">{active.solved}</b>/{active.total} solved · {active.pending} pending
           </>
         ) : (
-          "Hover or focus a cell to see its pattern. Select it to open the pattern."
+          "Hover or focus a cell to see its pattern. Select it to open the pattern's problems."
         )}
       </p>
 

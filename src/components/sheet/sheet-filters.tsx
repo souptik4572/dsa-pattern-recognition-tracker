@@ -1,15 +1,22 @@
 "use client";
 
-import { ArrowDownWideNarrow, ArrowUpNarrowWide, X } from "lucide-react";
+import { ArrowDownWideNarrow, ArrowUpNarrowWide } from "lucide-react";
+import {
+  ClearFiltersButton,
+  DifficultyFilter,
+  FamilyFilter,
+  ProblemStatusFilter,
+  TierFilter,
+} from "@/components/filters/filter-selects";
 import { SearchInput } from "@/components/search-input";
 import { Button } from "@/components/ui/button";
 import { Select } from "@/components/ui/field";
 import { useUrlState } from "@/components/url-state";
-import { STATUS_FILTER_LABEL, STATUS_FILTERS } from "@/lib/progress/status";
-import { DIFFICULTIES, DIFFICULTY_LABEL, TIER_LABEL, TIERS } from "@/lib/sheet/meta";
-import { hasActiveFilters, SORT_KEYS, SORT_LABEL, toParamValue, type SheetParams } from "@/lib/sheet/search-params";
+import { hasActiveFilters, SORT_KEYS, SORT_LABEL, type SheetParams } from "@/lib/sheet/search-params";
 
 export type FilterFamily = { id: string; name: string; patterns: { id: string; name: string }[] };
+
+const FILTER_KEYS = ["q", "family", "pattern", "difficulty", "tier", "status"];
 
 export function SheetFilters({ params, families }: { params: SheetParams; families: FilterFamily[] }) {
   const { navigate, isPending } = useUrlState();
@@ -26,18 +33,7 @@ export function SheetFilters({ params, families }: { params: SheetParams; famili
       />
 
       <div className="mt-3 grid grid-cols-2 gap-2 md:grid-cols-3 lg:grid-cols-6">
-        <Select
-          aria-label="Family"
-          value={params.family ?? ""}
-          onChange={(event) => navigate({ family: event.target.value || null, pattern: null })}
-        >
-          <option value="">All families</option>
-          {families.map((family) => (
-            <option key={family.id} value={family.id}>
-              {family.id} · {family.name}
-            </option>
-          ))}
-        </Select>
+        <FamilyFilter value={params.family} families={families} alsoClear={["pattern"]} />
 
         <Select aria-label="Pattern" value={params.pattern ?? ""} onChange={(event) => navigate({ pattern: event.target.value || null })}>
           <option value="">All patterns</option>
@@ -52,40 +48,9 @@ export function SheetFilters({ params, families }: { params: SheetParams; famili
           ))}
         </Select>
 
-        <Select
-          aria-label="Difficulty"
-          value={params.difficulty ? toParamValue(params.difficulty) : ""}
-          onChange={(event) => navigate({ difficulty: event.target.value || null })}
-        >
-          <option value="">Any difficulty</option>
-          {DIFFICULTIES.map((difficulty) => (
-            <option key={difficulty} value={toParamValue(difficulty)}>
-              {DIFFICULTY_LABEL[difficulty]}
-            </option>
-          ))}
-        </Select>
-
-        <Select aria-label="Tier" value={params.tier ? toParamValue(params.tier) : ""} onChange={(event) => navigate({ tier: event.target.value || null })}>
-          <option value="">Any tier</option>
-          {TIERS.map((tier) => (
-            <option key={tier} value={toParamValue(tier)}>
-              {TIER_LABEL[tier]}
-            </option>
-          ))}
-        </Select>
-
-        <Select
-          aria-label="Status"
-          value={params.status ? toParamValue(params.status) : ""}
-          onChange={(event) => navigate({ status: event.target.value || null })}
-        >
-          <option value="">Any status</option>
-          {STATUS_FILTERS.map((status) => (
-            <option key={status} value={toParamValue(status)}>
-              {STATUS_FILTER_LABEL[status]}
-            </option>
-          ))}
-        </Select>
+        <DifficultyFilter value={params.difficulty} />
+        <TierFilter value={params.tier} />
+        <ProblemStatusFilter value={params.status} />
 
         <div className="flex gap-2">
           <Select
@@ -119,15 +84,7 @@ export function SheetFilters({ params, families }: { params: SheetParams; famili
           <span aria-live="polite" className="font-mono text-xs text-ink-3">
             {isPending ? "Updating…" : ""}
           </span>
-          {active && (
-            <Button
-              variant="ghost"
-              size="sm"
-              onClick={() => navigate({ q: null, family: null, pattern: null, difficulty: null, tier: null, status: null })}
-            >
-              <X aria-hidden className="size-3.5" /> Clear filters
-            </Button>
-          )}
+          {active && <ClearFiltersButton keys={FILTER_KEYS} />}
         </div>
       )}
     </div>

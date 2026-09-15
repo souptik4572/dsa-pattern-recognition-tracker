@@ -1,11 +1,16 @@
 import "server-only";
 import { cache } from "react";
-import type { Prisma } from "@/generated/prisma/client";
 import { db } from "@/lib/db";
-import { computeProgressStats, type ProgressStats, type SlotFacts } from "@/lib/progress/stats";
+import { matchesView, type PatternView } from "@/lib/patterns/views";
+import { pickNextUp } from "@/lib/progress/next-up";
+import { computeProgressStats, emptyCounts, type ProgressCounts, type ProgressStats } from "@/lib/progress/stats";
 import type { Status, StoredStatus } from "@/lib/progress/status";
-import type { Difficulty, Tier } from "@/lib/sheet/meta";
-import type { SheetParams, SortKey } from "@/lib/sheet/search-params";
+import { matchesFilters, querySheet, type ProblemFilters, type SheetEntry } from "@/lib/sheet/query";
+import type { PatternRef, ProblemRow } from "@/lib/sheet/rows";
+import type { SheetParams } from "@/lib/sheet/search-params";
+import { getSheetCatalog } from "./catalog";
+
+// Pages combine the shared in-memory catalog with a single query for the user's own statuses.
 
 // ---------------------------------------------------------------------------
 // Catalog (identical for every user)
@@ -29,195 +34,91 @@ export type CatalogFamily = {
 };
 
 export const getCatalog = cache(async (): Promise<CatalogFamily[]> => {
-  const families = await db.family.findMany({
-    orderBy: { position: "asc" },
-    select: {
-      id: true,
-      name: true,
-      why: true,
-      patterns: {
-        orderBy: { position: "asc" },
-        select: {
-          id: true,
-          slug: true,
-          name: true,
-          trigger: true,
-          complexity: true,
-          familyId: true,
-          _count: { select: { slots: true } },
-        },
-      },
-    },
-  });
-
-  return families.map((family) => ({
-    ...family,
-    patterns: family.patterns.map(({ _count, ...pattern }) => ({ ...pattern, slotCount: _count.slots })),
+  const catalog = await getSheetCatalog();
+  return catalog.families.map((family) => ({
+    id: family.id,
+    name: family.name,
+    why: family.why,
+    patterns: family.patterns.map((pattern) => ({
+      id: pattern.id,
+      slug: pattern.slug,
+      name: pattern.name,
+      trigger: pattern.trigger,
+      complexity: pattern.complexity,
+      familyId: pattern.familyId,
+      slotCount: pattern.entries.length,
+    })),
   }));
 });
 
 export const getSheetTotals = cache(async () => {
-  const [families, patterns, problems, slots] = await Promise.all([
-    db.family.count(),
-    db.pattern.count(),
-    db.problem.count(),
-    db.patternProblem.count(),
-  ]);
-  return { families, patterns, problems, slots };
-});
-
-const getSlotFacts = cache(async (): Promise<SlotFacts[]> => {
-  const slots = await db.patternProblem.findMany({
-    orderBy: { position: "asc" },
-    select: {
-      id: true,
-      patternId: true,
-      tier: true,
-      pattern: { select: { familyId: true } },
-      problem: { select: { difficulty: true } },
-    },
-  });
-  return slots.map((slot) => ({
-    id: slot.id,
-    patternId: slot.patternId,
-    familyId: slot.pattern.familyId,
-    tier: slot.tier,
-    difficulty: slot.problem.difficulty,
-  }));
+  const catalog = await getSheetCatalog();
+  return {
+    families: catalog.families.length,
+    patterns: catalog.patterns.length,
+    problems: catalog.problemCount,
+    slots: catalog.entries.length,
+  };
 });
 
 // ---------------------------------------------------------------------------
 // Per-user progress
 // ---------------------------------------------------------------------------
 
-export const getProgressStats = cache(async (userId: string): Promise<ProgressStats> => {
-  const [slots, progress] = await Promise.all([
-    getSlotFacts(),
-    db.userProgress.findMany({ where: { userId }, select: { slotId: true, status: true } }),
-  ]);
-  return computeProgressStats(slots, new Map(progress.map((row) => [row.slotId, row.status])));
+type OwnProgress = ReadonlyMap<string, { status: StoredStatus; updatedAt: Date }>;
+
+/** Every status this user has set. Deduplicated per request, so each page runs it at most once. */
+const getOwnProgress = cache(async (userId: string): Promise<OwnProgress> => {
+  const rows = await db.userProgress.findMany({
+    where: { userId },
+    select: { slotId: true, status: true, updatedAt: true },
+  });
+  return new Map(rows.map((row) => [row.slotId, { status: row.status, updatedAt: row.updatedAt }]));
 });
 
-export type SheetRow = {
-  slotId: string;
-  tier: Tier;
-  status: Status;
+function statusReader(progress: OwnProgress) {
+  return (slotId: string): Status => progress.get(slotId)?.status ?? "NOT_STARTED";
+}
+
+async function loadForUser(userId: string) {
+  const [catalog, progress] = await Promise.all([getSheetCatalog(), getOwnProgress(userId)]);
+  return { catalog, progress, statusOf: statusReader(progress) };
+}
+
+export const getProgressStats = cache(async (userId: string): Promise<ProgressStats> => {
+  const { catalog, progress } = await loadForUser(userId);
+  return computeProgressStats(
+    catalog.facts,
+    new Map([...progress].map(([slotId, own]) => [slotId, own.status])),
+  );
+});
+
+export type SheetRow = ProblemRow & {
   updatedAt: Date | null;
-  problem: {
-    id: number;
-    title: string;
-    difficulty: Difficulty;
-    leetcodeUrl: string;
-    videoUrl: string | null;
-    codeUrl: string;
-    videoSearchQuery: string;
-  };
-  pattern: { id: string; slug: string; name: string; familyId: string; familyName: string };
+  pattern: PatternRef;
 };
 
-function rowSelect(userId: string) {
+function toProblemRow(entry: SheetEntry, progress: OwnProgress): ProblemRow {
   return {
-    id: true,
-    tier: true,
-    problem: {
-      select: {
-        id: true,
-        title: true,
-        difficulty: true,
-        leetcodeUrl: true,
-        videoUrl: true,
-        codeUrl: true,
-        videoSearchQuery: true,
-      },
-    },
-    pattern: { select: { id: true, slug: true, name: true, family: { select: { id: true, name: true } } } },
-    progress: { where: { userId }, select: { status: true, updatedAt: true } },
-  } satisfies Prisma.PatternProblemSelect;
-}
-
-type RowPayload = Prisma.PatternProblemGetPayload<{ select: ReturnType<typeof rowSelect> }>;
-
-function toSheetRow(slot: RowPayload): SheetRow {
-  const progress = slot.progress[0];
-  return {
-    slotId: slot.id,
-    tier: slot.tier,
-    status: progress?.status ?? "NOT_STARTED",
-    updatedAt: progress?.updatedAt ?? null,
-    problem: slot.problem,
-    pattern: {
-      id: slot.pattern.id,
-      slug: slot.pattern.slug,
-      name: slot.pattern.name,
-      familyId: slot.pattern.family.id,
-      familyName: slot.pattern.family.name,
-    },
+    slotId: entry.slotId,
+    tier: entry.tier,
+    status: progress.get(entry.slotId)?.status ?? "NOT_STARTED",
+    problem: entry.problem,
   };
 }
 
-function statusWhere(userId: string, status: SheetParams["status"]): Prisma.PatternProblemWhereInput | null {
-  const withStatus = (...statuses: StoredStatus[]): Prisma.PatternProblemWhereInput => ({
-    progress: { some: { userId, status: { in: statuses } } },
-  });
-  const notStarted: Prisma.PatternProblemWhereInput = { progress: { none: { userId } } };
-
-  switch (status) {
-    case undefined:
-      return null;
-    case "NOT_STARTED":
-      return notStarted;
-    case "SOLVED":
-      return withStatus("SOLVED_SLOW", "SOLVED_CLEAN");
-    case "PENDING":
-      return { OR: [notStarted, withStatus("NEEDED_HELP")] };
-    case "REVISIT":
-      return withStatus("NEEDED_HELP", "SOLVED_SLOW");
-    default:
-      return withStatus(status);
-  }
-}
-
-export function buildSheetWhere(userId: string, params: SheetParams): Prisma.PatternProblemWhereInput {
-  const and: Prisma.PatternProblemWhereInput[] = [];
-
-  if (params.family) and.push({ pattern: { familyId: params.family } });
-  if (params.pattern) and.push({ patternId: params.pattern });
-  if (params.tier) and.push({ tier: params.tier });
-  if (params.difficulty) and.push({ problem: { difficulty: params.difficulty } });
-
-  const byStatus = statusWhere(userId, params.status);
-  if (byStatus) and.push(byStatus);
-
-  if (params.q) {
-    const contains = { contains: params.q, mode: "insensitive" } as const;
-    const or: Prisma.PatternProblemWhereInput[] = [
-      { problem: { title: contains } },
-      { pattern: { name: contains } },
-      { pattern: { trigger: contains } },
-      { pattern: { family: { name: contains } } },
-    ];
-    const number = params.q.replace(/^#/, "");
-    if (/^\d{1,5}$/.test(number)) or.push({ problemId: Number(number) });
-    and.push({ OR: or });
-  }
-
-  return and.length ? { AND: and } : {};
-}
-
-function sheetOrderBy(sort: SortKey, dir: SheetParams["dir"]): Prisma.PatternProblemOrderByWithRelationInput[] {
-  const tieBreak = { position: "asc" } as const;
-  switch (sort) {
-    case "number":
-      return [{ problemId: dir }, tieBreak];
-    case "title":
-      return [{ problem: { title: dir } }, tieBreak];
-    case "difficulty":
-      return [{ problem: { difficulty: dir } }, tieBreak];
-    case "tier":
-      return [{ tier: dir }, tieBreak];
-    case "sheet":
-      return [{ position: dir }];
-  }
+function toRow(entry: SheetEntry, progress: OwnProgress): SheetRow {
+  return {
+    ...toProblemRow(entry, progress),
+    updatedAt: progress.get(entry.slotId)?.updatedAt ?? null,
+    pattern: {
+      id: entry.pattern.id,
+      slug: entry.pattern.slug,
+      name: entry.pattern.name,
+      familyId: entry.pattern.familyId,
+      familyName: entry.pattern.familyName,
+    },
+  };
 }
 
 export type SheetPage = {
@@ -230,68 +131,83 @@ export type SheetPage = {
 };
 
 export async function getSheetPage(userId: string, params: SheetParams): Promise<SheetPage> {
-  const where = buildSheetWhere(userId, params);
-  const [total, solved] = await Promise.all([
-    db.patternProblem.count({ where }),
-    db.patternProblem.count({ where: { AND: [where, statusWhere(userId, "SOLVED") ?? {}] } }),
-  ]);
-  const pageCount = Math.max(1, Math.ceil(total / params.pageSize));
-  // An out-of-range page (stale link, filters narrowed) shows the last page rather than an empty table.
-  const page = Math.min(params.page, pageCount);
-
-  const slots = await db.patternProblem.findMany({
-    where,
-    orderBy: sheetOrderBy(params.sort, params.dir),
-    skip: (page - 1) * params.pageSize,
-    take: params.pageSize,
-    select: rowSelect(userId),
-  });
-
-  return { rows: slots.map(toSheetRow), total, solved, page, pageCount };
+  const { catalog, progress, statusOf } = await loadForUser(userId);
+  const result = querySheet(catalog.entries, statusOf, params);
+  return {
+    rows: result.entries.map((entry) => toRow(entry, progress)),
+    total: result.total,
+    solved: result.solved,
+    page: result.page,
+    pageCount: result.pageCount,
+  };
 }
 
 // ---------------------------------------------------------------------------
-// Pattern detail
+// Patterns page
 // ---------------------------------------------------------------------------
 
-export type PatternDetail = {
+export type PatternPanelData = {
   id: string;
   slug: string;
   name: string;
   trigger: string;
   template: string;
   complexity: string;
-  family: { id: string; name: string };
-  previous: { slug: string; id: string; name: string } | null;
-  next: { slug: string; id: string; name: string } | null;
-  rows: SheetRow[];
+  /** Progress across all of the pattern's problems, regardless of filters. */
+  counts: ProgressCounts;
+  /** The pattern's problems that match the current filters, in sheet order. */
+  rows: ProblemRow[];
 };
 
-export async function getPatternDetail(userId: string, slug: string): Promise<PatternDetail | null> {
-  const pattern = await db.pattern.findUnique({
-    where: { slug },
-    select: {
-      id: true,
-      slug: true,
-      name: true,
-      trigger: true,
-      template: true,
-      complexity: true,
-      position: true,
-      family: { select: { id: true, name: true } },
-      slots: { orderBy: { position: "asc" }, select: rowSelect(userId) },
-    },
+export type PatternSectionData = {
+  id: string;
+  name: string;
+  why: string;
+  counts: ProgressCounts;
+  patterns: PatternPanelData[];
+};
+
+/**
+ * Families and patterns with the problems matching the filters. A pattern is listed when at least
+ * one of its problems matches and its overall progress fits the chosen view.
+ */
+export async function getPatternSections(
+  userId: string,
+  { view, ...filters }: ProblemFilters & { view: PatternView },
+): Promise<PatternSectionData[]> {
+  const [{ catalog, progress, statusOf }, stats] = await Promise.all([loadForUser(userId), getProgressStats(userId)]);
+
+  return catalog.families.flatMap((family) => {
+    const patterns = family.patterns.flatMap((pattern) => {
+      const counts = stats.byPattern[pattern.id] ?? emptyCounts();
+      const rows = pattern.entries
+        .filter((entry) => matchesFilters(entry, statusOf(entry.slotId), filters))
+        .map((entry) => toProblemRow(entry, progress));
+      if (rows.length === 0 || !matchesView(counts, view)) return [];
+      return [
+        {
+          id: pattern.id,
+          slug: pattern.slug,
+          name: pattern.name,
+          trigger: pattern.trigger,
+          template: pattern.template,
+          complexity: pattern.complexity,
+          counts,
+          rows,
+        },
+      ];
+    });
+    if (patterns.length === 0) return [];
+    return [
+      {
+        id: family.id,
+        name: family.name,
+        why: family.why,
+        counts: stats.byFamily[family.id] ?? emptyCounts(),
+        patterns,
+      },
+    ];
   });
-  if (!pattern) return null;
-
-  const neighbour = { slug: true, id: true, name: true } as const;
-  const [previous, next] = await Promise.all([
-    db.pattern.findFirst({ where: { position: { lt: pattern.position } }, orderBy: { position: "desc" }, select: neighbour }),
-    db.pattern.findFirst({ where: { position: { gt: pattern.position } }, orderBy: { position: "asc" }, select: neighbour }),
-  ]);
-
-  const { slots, position, ...rest } = pattern;
-  return { ...rest, previous, next, rows: slots.map(toSheetRow) };
 }
 
 // ---------------------------------------------------------------------------
@@ -300,51 +216,37 @@ export async function getPatternDetail(userId: string, slug: string): Promise<Pa
 
 export type NextUp = { reason: "revisit" | "core" | "any"; row: SheetRow } | null;
 
-/** Same priority as the original "Next up" button: revisit a needed-help problem, else the next untouched core problem. */
 export async function getNextUp(userId: string): Promise<NextUp> {
-  const find = (where: Prisma.PatternProblemWhereInput) =>
-    db.patternProblem.findFirst({ where, orderBy: { position: "asc" }, select: rowSelect(userId) });
-
-  const revisit = await find({ progress: { some: { userId, status: "NEEDED_HELP" } } });
-  if (revisit) return { reason: "revisit", row: toSheetRow(revisit) };
-
-  const core = await find({ tier: "CORE", progress: { none: { userId } } });
-  if (core) return { reason: "core", row: toSheetRow(core) };
-
-  const any = await find({ progress: { none: { userId } } });
-  return any ? { reason: "any", row: toSheetRow(any) } : null;
+  const { catalog, progress, statusOf } = await loadForUser(userId);
+  const pick = pickNextUp(catalog.entries, statusOf);
+  return pick && { reason: pick.reason, row: toRow(pick.entry, progress) };
 }
 
 export async function getRecentActivity(userId: string, take = 6) {
-  const rows = await db.userProgress.findMany({
-    where: { userId },
-    orderBy: { updatedAt: "desc" },
-    take,
-    select: {
-      status: true,
-      updatedAt: true,
-      slot: {
-        select: {
-          id: true,
-          problem: { select: { id: true, title: true } },
-          pattern: { select: { id: true, slug: true, name: true } },
-        },
-      },
-    },
-  });
-  return rows.map((row) => ({
-    slotId: row.slot.id,
-    status: row.status,
-    updatedAt: row.updatedAt,
-    problem: row.slot.problem,
-    pattern: row.slot.pattern,
-  }));
+  const { catalog, progress } = await loadForUser(userId);
+  return [...progress]
+    .sort(([, a], [, b]) => b.updatedAt.getTime() - a.updatedAt.getTime())
+    .flatMap(([slotId, own]) => {
+      const entry = catalog.entryBySlotId.get(slotId);
+      return entry
+        ? [
+            {
+              slotId,
+              status: own.status,
+              updatedAt: own.updatedAt,
+              problem: { id: entry.problem.id, title: entry.problem.title },
+              pattern: { id: entry.pattern.id, slug: entry.pattern.slug, name: entry.pattern.name },
+            },
+          ]
+        : [];
+    })
+    .slice(0, take);
 }
 
 /** Pattern triggers for the recognition drill. */
 export async function getDrillPatterns() {
-  const catalog = await getCatalog();
-  return catalog.flatMap((family) =>
+  const catalog = await getSheetCatalog();
+  return catalog.families.flatMap((family) =>
     family.patterns.map((pattern) => ({
       id: pattern.id,
       slug: pattern.slug,
