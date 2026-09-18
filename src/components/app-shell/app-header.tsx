@@ -6,17 +6,14 @@ import { UserMenu } from "./user-menu";
 
 export function AppHeader({ user }: { user: CurrentUser }) {
   const links = [
-    { href: "/dashboard", label: "Dashboard" },
     { href: "/sheet", label: "Sheet" },
-    { href: "/patterns", label: "Patterns" },
-    { href: "/drill", label: "Drill" },
     ...(user.role === "admin" ? [{ href: "/admin", label: "Admin" }] : []),
   ];
 
   return (
     <header className="sticky top-0 z-30 border-b border-rule bg-paper/90 backdrop-blur">
       <div className="mx-auto flex max-w-6xl flex-wrap items-center gap-x-6 gap-y-2 px-4 py-3 sm:px-6">
-        <Link href="/dashboard" className="shrink-0">
+        <Link href="/sheet" className="shrink-0">
           <Logo />
         </Link>
         <div className="order-3 w-full sm:order-2 sm:w-auto sm:flex-1">

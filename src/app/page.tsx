@@ -40,8 +40,8 @@ export default async function HomePage() {
       <header className="flex items-center justify-between gap-4 py-5">
         <Logo />
         {user ? (
-          <ButtonLink href="/dashboard" size="sm">
-            Open dashboard
+          <ButtonLink href="/sheet" size="sm">
+            Open the sheet
           </ButtonLink>
         ) : (
           <div className="flex gap-2">
@@ -67,7 +67,7 @@ export default async function HomePage() {
           </p>
           <div className="mt-8 flex flex-wrap gap-3">
             {user ? (
-              <ButtonLink href="/dashboard">Go to your dashboard</ButtonLink>
+              <ButtonLink href="/sheet">Open your sheet</ButtonLink>
             ) : (
               <>
                 <ButtonLink href="/sign-up">Create a free account</ButtonLink>

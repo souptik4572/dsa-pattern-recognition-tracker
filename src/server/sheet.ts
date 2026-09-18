@@ -222,27 +222,6 @@ export async function getNextUp(userId: string): Promise<NextUp> {
   return pick && { reason: pick.reason, row: toRow(pick.entry, progress) };
 }
 
-export async function getRecentActivity(userId: string, take = 6) {
-  const { catalog, progress } = await loadForUser(userId);
-  return [...progress]
-    .sort(([, a], [, b]) => b.updatedAt.getTime() - a.updatedAt.getTime())
-    .flatMap(([slotId, own]) => {
-      const entry = catalog.entryBySlotId.get(slotId);
-      return entry
-        ? [
-            {
-              slotId,
-              status: own.status,
-              updatedAt: own.updatedAt,
-              problem: { id: entry.problem.id, title: entry.problem.title },
-              pattern: { id: entry.pattern.id, slug: entry.pattern.slug, name: entry.pattern.name },
-            },
-          ]
-        : [];
-    })
-    .slice(0, take);
-}
-
 /** Pattern triggers for the recognition drill. */
 export async function getDrillPatterns() {
   const catalog = await getSheetCatalog();

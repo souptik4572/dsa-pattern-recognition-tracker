@@ -11,18 +11,25 @@ and code solutions.
   sign-in, a session list with remote sign-out, and self-service account deletion.
 - **Roles.** Every page, server action and API route checks the session against the database.
   Users can only read and write their own progress. Admins manage roles and bans at `/admin`.
-- **The sheet** (`/sheet`). Every problem slot, with server-side search, filters (family,
-  pattern, difficulty, tier, status), sorting and pagination. All of it lives in the URL, so any
-  view can be shared or bookmarked.
-- **Progress metrics** (`/dashboard`, `/patterns`). Solved and pending counts overall and by
-  pattern, family, tier and difficulty, plus a pattern mastery grid, what's due for a revisit, and
-  a "next up" suggestion.
-- **Patterns** (`/patterns`). Every pattern, grouped by family. Open a pattern in place to see its
-  trigger, template, complexity, progress and problems. The sheet's problem filters (search,
-  family, difficulty, tier, status) apply inside every pattern, and links from the dashboard, sheet
-  and drill open the right pattern directly.
-- **Recognition drill** (`/drill`). Read a trigger and name the pattern, across the whole sheet
-  or within a single family.
+- **One sheet** (`/sheet`). Everything lives on one page, modelled on pattern-first sheets such as
+  [Thita's DSA Patterns Sheet](https://thita.ai/dsa-patterns-sheet):
+  - **Progress at the top:**
+    - overall solved and pending, due for revisit, and patterns complete;
+    - breakdowns by difficulty and tier;
+    - a "next up" suggestion;
+    - a pattern mastery map.
+
+    Every count is a link that filters the problems below.
+  - **One toolbar:** search (`⌘K` / `Ctrl K`) plus family, pattern, difficulty, tier and status
+    filters, with an active-filter count and one-click clear. It all lives in the URL, so any view
+    can be shared or bookmarked.
+  - **By pattern** (the default): families and their patterns as expandable panels. Each panel shows
+    the pattern's trigger, template, complexity, progress and problems. Patterns can also be
+    filtered by overall progress.
+  - **All problems:** every slot in one sortable, paginated table.
+  - **Recognition drill:** read a trigger and name the pattern, in a pop-up over the sheet.
+
+  The old `/dashboard`, `/patterns` and `/drill` URLs redirect into the sheet.
 - **Progress export and import.** JSON export, and import from either an export file or the
   original tracker's saved state (slot ids match the original storage keys, e.g. `1.1:167`).
 
@@ -145,7 +152,7 @@ src/
   proxy.ts               optimistic redirect for signed-out visitors (cookie presence only)
   app/
     (auth)/              sign-in, sign-up, forgot/reset password
-    (app)/               signed-in pages: dashboard, sheet, patterns, drill, settings, admin
+    (app)/               signed-in pages: the sheet, settings, admin
     actions/             server actions: thin wrappers that authorize, validate, call the data layer
     api/auth/[...all]/   Better Auth handler
     api/progress/export/ JSON export
@@ -169,10 +176,10 @@ prisma/
 - Stats, "next up", recent activity, and the sheet's filtering, sorting and pagination are computed
   on the server from that data (`src/lib/sheet/query.ts`, `src/lib/progress/*`). Only the requested
   page is sent to the browser.
-- The main tabs have `loading.tsx` skeletons, so a click shows feedback immediately. `/admin`
-  deliberately has none, because streaming would turn its 403 response into a 200.
-- Opening a pattern on `/patterns` needs no server round trip. Its problems arrive with the page,
-  and they're only rendered once the pattern is opened.
+- The sheet and settings have `loading.tsx` skeletons, so a click shows feedback immediately.
+  `/admin` deliberately has none, because streaming would turn its 403 response into a 200.
+- Opening a pattern on the sheet needs no server round trip. Its problems arrive with the page, and
+  they're only rendered once the pattern is opened.
 
 **Authorization** is layered:
 

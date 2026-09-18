@@ -20,13 +20,17 @@ const nextConfig: NextConfig = {
     return [{ source: "/:path*", headers: securityHeaders }];
   },
   async redirects() {
+    // Everything now lives on /sheet. Old pages redirect there; query strings carry over, so links
+    // like /patterns?open=1.1 or /dashboard still land on the right view.
     return [
+      { source: "/dashboard", destination: "/sheet", permanent: false },
+      { source: "/patterns", destination: "/sheet", permanent: false },
       {
-        // Patterns used to have their own pages (/patterns/1-1); they now open in place on /patterns.
         source: "/patterns/:family(\\d{1,2})-:pattern(\\d{1,2})",
-        destination: "/patterns?open=:family.:pattern#pattern-:family-:pattern",
+        destination: "/sheet?open=:family.:pattern#pattern-:family-:pattern",
         permanent: false,
       },
+      { source: "/drill", destination: "/sheet?drill=1", permanent: false },
     ];
   },
 };

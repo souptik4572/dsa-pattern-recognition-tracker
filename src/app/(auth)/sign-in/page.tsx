@@ -3,7 +3,7 @@ import Link from "next/link";
 import { redirect } from "next/navigation";
 import { SignInForm } from "@/components/auth/sign-in-form";
 import { enabledSocialProviders } from "@/lib/auth";
-import { safeCallbackUrl } from "@/lib/safe-redirect";
+import { DEFAULT_REDIRECT, safeCallbackUrl } from "@/lib/safe-redirect";
 import { firstParam, type RawSearchParams } from "@/lib/search-param";
 import { getCurrentUser } from "@/server/auth";
 
@@ -14,7 +14,7 @@ export default async function SignInPage({ searchParams }: { searchParams: Promi
   const callbackUrl = safeCallbackUrl(firstParam(params.callbackUrl));
   if (await getCurrentUser()) redirect(callbackUrl);
 
-  const signUpHref = callbackUrl === "/dashboard" ? "/sign-up" : `/sign-up?callbackUrl=${encodeURIComponent(callbackUrl)}`;
+  const signUpHref = callbackUrl === DEFAULT_REDIRECT ? "/sign-up" : `/sign-up?callbackUrl=${encodeURIComponent(callbackUrl)}`;
 
   return (
     <>

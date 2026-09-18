@@ -100,8 +100,8 @@ describe("ids", () => {
     expect(slotId("1.1", 167)).toBe("1.1:167");
   });
 
-  it("links to a pattern's panel on the patterns page", () => {
+  it("links to a pattern's panel on the sheet", () => {
     expect(patternAnchor("10.2")).toBe("pattern-10-2");
-    expect(patternHref("10.2")).toBe("/patterns?open=10.2#pattern-10-2");
+    expect(patternHref("10.2")).toBe("/sheet?open=10.2#pattern-10-2");
   });
 });

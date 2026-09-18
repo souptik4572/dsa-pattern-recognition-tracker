@@ -1,5 +1,12 @@
 import { describe, expect, it } from "vitest";
-import { hasActiveFilters, paginationWindow, parseSheetParams, sheetHref } from "./search-params";
+import {
+  countActiveFilters,
+  hasActiveFilters,
+  paginationWindow,
+  parseSheetParams,
+  parseSheetViewParams,
+  sheetHref,
+} from "./search-params";
 
 describe("parseSheetParams", () => {
   it("returns defaults for an empty query", () => {
@@ -84,5 +91,48 @@ describe("paginationWindow", () => {
     expect(paginationWindow(10, 38)).toEqual([1, "gap", 8, 9, 10, 11, 12, "gap", 38]);
     expect(paginationWindow(4, 38)).toEqual([1, 2, 3, 4, 5, 6, "gap", 38]);
     expect(paginationWindow(38, 38)).toEqual([1, "gap", 36, 37, 38]);
+  });
+});
+
+describe("parseSheetViewParams", () => {
+  it("defaults to the patterns view with nothing opened", () => {
+    expect(parseSheetViewParams({})).toEqual({ view: "patterns", show: "all", open: [] });
+  });
+
+  it("parses the list view, a progress filter and patterns to open, dropping junk and duplicates", () => {
+    expect(parseSheetViewParams({ view: "list", show: "complete", open: "1.1,bogus,12.3,1.1" })).toEqual({
+      view: "list",
+      show: "complete",
+      open: ["1.1", "12.3"],
+    });
+    expect(parseSheetViewParams({ view: "grid", show: "everything", open: "<script>" })).toEqual({
+      view: "patterns",
+      show: "all",
+      open: [],
+    });
+  });
+});
+
+describe("sheetHref with view params", () => {
+  it("adds non-default view params and round-trips them", () => {
+    const defaults = parseSheetParams({});
+    expect(sheetHref({ ...defaults, view: "list" }, { tier: "BOSS" })).toBe("/sheet?tier=boss&view=list");
+    expect(sheetHref({ ...defaults, view: "patterns", show: "all", open: [] })).toBe("/sheet");
+
+    const href = sheetHref(defaults, { show: "complete", open: ["1.1", "2.3"] });
+    expect(href).toBe("/sheet?show=complete&open=1.1%2C2.3");
+    expect(parseSheetViewParams(Object.fromEntries(new URL(href, "http://x").searchParams))).toEqual({
+      view: "patterns",
+      show: "complete",
+      open: ["1.1", "2.3"],
+    });
+  });
+});
+
+describe("countActiveFilters", () => {
+  it("counts problem filters, plus pattern progress in the patterns view only", () => {
+    expect(countActiveFilters(parseSheetParams({ q: "heap", tier: "core", sort: "title", page: "2" }), { view: "list", show: "all" })).toBe(2);
+    expect(countActiveFilters(parseSheetParams({}), { view: "patterns", show: "complete" })).toBe(1);
+    expect(countActiveFilters(parseSheetParams({}), { view: "list", show: "complete" })).toBe(0);
   });
 });

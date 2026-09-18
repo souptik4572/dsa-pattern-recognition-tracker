@@ -8,6 +8,7 @@ import { StatusBar, StatusLegend } from "@/components/progress/status-bar";
 import { Button } from "@/components/ui/button";
 import { cn } from "@/lib/cn";
 import { patternAnchor } from "@/lib/sheet/ids";
+import { parseSheetParams, sheetHref } from "@/lib/sheet/search-params";
 import type { PatternPanelData } from "@/server/sheet";
 
 type OpenState = {
@@ -51,7 +52,7 @@ export function PatternOpenProvider({
   }
 
   useEffect(() => {
-    // Links from other pages point at #pattern-x-y; bring that panel into view once it has rendered.
+    // Links point at #pattern-x-y; bring that panel into view once it has rendered.
     const id = decodeURIComponent(window.location.hash.slice(1));
     if (id) document.getElementById(id)?.scrollIntoView({ block: "start" });
   }, []);
@@ -153,8 +154,11 @@ export function PatternPanel({ pattern, filtered }: { pattern: PatternPanelData;
               <p className={label}>Your progress</p>
               <StatusBar counts={counts} className="mt-2.5" />
               <StatusLegend counts={counts} className="mt-3" />
-              <Link href={`/sheet?pattern=${pattern.id}`} className="mt-3 inline-block font-mono text-xs text-accent hover:underline">
-                Open in sheet →
+              <Link
+                href={`${sheetHref(parseSheetParams({}), { view: "list", pattern: pattern.id })}#problems`}
+                className="mt-3 inline-block font-mono text-xs text-accent hover:underline"
+              >
+                Show as a list →
               </Link>
             </div>
           </div>

@@ -17,9 +17,12 @@ const EMPTY_SCORE: Score = { correct: 0, answered: 0, streak: 0, best: 0 };
 export function RecognitionDrill({
   patterns,
   families,
+  onStudy,
 }: {
   patterns: DrillPattern[];
   families: { id: string; name: string }[];
+  /** Called when the user follows a link to study a pattern, e.g. to close the dialog around the drill. */
+  onStudy?: () => void;
 }) {
   const [familyId, setFamilyId] = useState<string | null>(null);
   // Questions are generated only after a user action, so server and client renders never disagree.
@@ -50,12 +53,14 @@ export function RecognitionDrill({
   const onKeyDown = useEffectEvent((event: KeyboardEvent) => {
     if (!question || event.metaKey || event.ctrlKey || event.altKey) return;
     const target = event.target as HTMLElement;
-    if (["INPUT", "SELECT", "TEXTAREA", "BUTTON"].includes(target.tagName)) return;
+    if (["INPUT", "SELECT", "TEXTAREA"].includes(target.tagName)) return;
+    // Enter on a focused button already activates it; handling it here as well would skip a question.
+    const onButton = target.tagName === "BUTTON";
 
     const index = Number(event.key) - 1;
     if (!picked && Number.isInteger(index) && index >= 0 && index < question.options.length) {
       choose(question.options[index].id);
-    } else if (picked && (event.key === "Enter" || event.key.toLowerCase() === "n")) {
+    } else if (picked && ((event.key === "Enter" && !onButton) || event.key.toLowerCase() === "n")) {
       nextQuestion();
     }
   });
@@ -159,7 +164,7 @@ export function RecognitionDrill({
                 <span className="text-ink-2">
                   It&apos;s {question.answer.id} from {question.answer.familyName}.{" "}
                 </span>
-                <Link href={patternHref(question.answer.id)} className="text-accent hover:underline">
+                <Link href={patternHref(question.answer.id)} onClick={onStudy} className="text-accent hover:underline">
                   Study this pattern →
                 </Link>
               </>

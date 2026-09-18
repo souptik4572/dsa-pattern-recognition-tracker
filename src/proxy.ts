@@ -7,7 +7,7 @@ import { NextResponse, type NextRequest } from "next/server";
  * route handler re-validates the session against the database (src/server/auth.ts).
  *
  * Authenticated users are intentionally NOT redirected away from the auth pages
- * here: a stale cookie would ping-pong between /sign-in and /dashboard. The auth
+ * here: a stale cookie would ping-pong between /sign-in and /sheet. The auth
  * pages do that redirect after a real session check instead.
  */
 export function proxy(request: NextRequest) {
@@ -19,12 +19,5 @@ export function proxy(request: NextRequest) {
 }
 
 export const config = {
-  matcher: [
-    "/dashboard/:path*",
-    "/sheet/:path*",
-    "/patterns/:path*",
-    "/drill/:path*",
-    "/settings/:path*",
-    "/admin/:path*",
-  ],
+  matcher: ["/sheet/:path*", "/settings/:path*", "/admin/:path*"],
 };

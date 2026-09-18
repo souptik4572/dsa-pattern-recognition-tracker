@@ -1,4 +1,4 @@
-export const DEFAULT_REDIRECT = "/dashboard";
+export const DEFAULT_REDIRECT = "/sheet";
 
 const AUTH_PAGES = ["/sign-in", "/sign-up", "/forgot-password", "/reset-password"];
 
