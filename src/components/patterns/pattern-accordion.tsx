@@ -1,6 +1,6 @@
 "use client";
 
-import { ChevronRight } from "lucide-react";
+import { ChevronRight, ChevronsDownUp, ChevronsUpDown } from "lucide-react";
 import Link from "next/link";
 import { createContext, useContext, useEffect, useMemo, useState, type ReactNode } from "react";
 import { ProblemTable } from "@/components/problems/problem-table";
@@ -15,6 +15,8 @@ type OpenState = {
   isOpen: (patternId: string) => boolean;
   toggle: (patternId: string) => void;
   setAll: (open: boolean) => void;
+  /** Opens or closes a group of patterns, e.g. every pattern in one family. */
+  setMany: (patternIds: readonly string[], open: boolean) => void;
   openCount: number;
   total: number;
 };
@@ -68,6 +70,15 @@ export function PatternOpenProvider({
           return next;
         }),
       setAll: (expand) => setOpen(expand ? new Set(patternIds) : new Set()),
+      setMany: (ids, expand) =>
+        setOpen((current) => {
+          const next = new Set(current);
+          for (const id of ids) {
+            if (expand) next.add(id);
+            else next.delete(id);
+          }
+          return next;
+        }),
       openCount: patternIds.filter((patternId) => open.has(patternId)).length,
       total: patternIds.length,
     }),
@@ -82,10 +93,38 @@ export function ExpandCollapseControls() {
   return (
     <div className="flex items-center gap-2">
       <Button variant="secondary" size="sm" disabled={total === 0 || openCount === total} onClick={() => setAll(true)}>
-        Expand all
+        <ChevronsUpDown aria-hidden className="size-3.5" /> Expand all
       </Button>
       <Button variant="ghost" size="sm" disabled={openCount === 0} onClick={() => setAll(false)}>
-        Collapse all
+        <ChevronsDownUp aria-hidden className="size-3.5" /> Collapse all
+      </Button>
+    </div>
+  );
+}
+
+/** Opens or closes every listed pattern in one family section. */
+export function SectionExpandControls({ patternIds, sectionName }: { patternIds: string[]; sectionName: string }) {
+  const { isOpen, setMany } = useOpenState();
+  const openCount = patternIds.filter(isOpen).length;
+  return (
+    <div className="flex items-center gap-1">
+      <Button
+        variant="ghost"
+        size="sm"
+        disabled={openCount === patternIds.length}
+        aria-label={`Expand all patterns in ${sectionName}`}
+        onClick={() => setMany(patternIds, true)}
+      >
+        <ChevronsUpDown aria-hidden className="size-3.5" /> Expand
+      </Button>
+      <Button
+        variant="ghost"
+        size="sm"
+        disabled={openCount === 0}
+        aria-label={`Collapse all patterns in ${sectionName}`}
+        onClick={() => setMany(patternIds, false)}
+      >
+        <ChevronsDownUp aria-hidden className="size-3.5" /> Collapse
       </Button>
     </div>
   );
@@ -125,7 +164,7 @@ export function PatternPanel({ pattern, filtered }: { pattern: PatternPanelData;
           </span>
           {filtered && (
             <span className="hidden shrink-0 rounded-[2px] bg-accent-soft px-1.5 py-0.5 font-mono text-[10px] text-accent sm:inline">
-              {pattern.rows.length} matching
+              {pattern.rows.length} of {pattern.totalCount} match
             </span>
           )}
           <span aria-hidden className="hidden w-24 shrink-0 md:block">
@@ -151,7 +190,7 @@ export function PatternPanel({ pattern, filtered }: { pattern: PatternPanelData;
               </p>
             </div>
             <div>
-              <p className={label}>Your progress</p>
+              <p className={label}>{filtered ? "Progress on matching problems" : "Your progress"}</p>
               <StatusBar counts={counts} className="mt-2.5" />
               <StatusLegend counts={counts} className="mt-3" />
               <Link
@@ -166,9 +205,9 @@ export function PatternPanel({ pattern, filtered }: { pattern: PatternPanelData;
           <div className="mt-4">
             <ProblemTable rows={pattern.rows} showPattern={false} caption={`Problems for ${pattern.id} ${pattern.name}`} />
           </div>
-          {filtered && pattern.rows.length < counts.total && (
+          {filtered && pattern.rows.length < pattern.totalCount && (
             <p className="mt-2 text-xs text-ink-3">
-              Showing {pattern.rows.length} of {counts.total} problems in this pattern that match your filters.
+              Showing {pattern.rows.length} of {pattern.totalCount} problems in this pattern that match your filters.
             </p>
           )}
         </div>

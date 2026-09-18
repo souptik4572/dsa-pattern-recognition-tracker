@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { computeProgressStats, masteryLevel, percent, type SlotFacts } from "./stats";
+import { computeProgressStats, countStatuses, masteryLevel, percent, type SlotFacts } from "./stats";
 import { isSolved, needsRevisit, nextStatus, STATUSES, type Status } from "./status";
 
 const slot = (id: string, overrides: Partial<SlotFacts> = {}): SlotFacts => ({
@@ -89,5 +89,17 @@ describe("percent", () => {
   it("rounds and guards against division by zero", () => {
     expect(percent(1, 3)).toBe(33);
     expect(percent(0, 0)).toBe(0);
+  });
+});
+
+describe("countStatuses", () => {
+  it("tallies any set of statuses into solved, pending and revisit", () => {
+    expect(countStatuses(["SOLVED_CLEAN", "SOLVED_SLOW", "NEEDED_HELP", "NOT_STARTED"])).toMatchObject({
+      total: 4,
+      solved: 2,
+      pending: 2,
+      revisit: 2,
+    });
+    expect(countStatuses([])).toMatchObject({ total: 0, solved: 0, pending: 0, revisit: 0 });
   });
 });

@@ -1,6 +1,7 @@
 import { z } from "zod";
 import { PATTERN_VIEWS, type PatternView } from "@/lib/patterns/views";
 import { STATUS_FILTERS, type StatusFilter } from "@/lib/progress/status";
+import { serializeQuery } from "@/lib/query-string";
 import { DIFFICULTIES, TIERS, type Difficulty, type Tier } from "./meta";
 
 export const PAGE_SIZES = [10, 25, 50, 100] as const;
@@ -24,9 +25,10 @@ export type SheetParams = {
   q: string;
   family?: string;
   pattern?: string;
-  difficulty?: Difficulty;
-  tier?: Tier;
-  status?: StatusFilter;
+  /** Multi-select filters: a problem matches any selected value, and an empty list means any. */
+  difficulty: Difficulty[];
+  tier: Tier[];
+  status: StatusFilter[];
   sort: SortKey;
   dir: SortDirection;
   page: number;
@@ -62,21 +64,39 @@ export function toParamValue(value: string): string {
   return value.toLowerCase().replaceAll("_", "-");
 }
 
-function enumParam<const T extends readonly [string, ...string[]]>(values: T) {
-  return z
-    .preprocess((value) => (typeof value === "string" ? value.toUpperCase().replaceAll("-", "_") : value), z.enum(values))
-    .optional()
-    .catch(undefined);
+/** Multi-select values in the URL: [EASY, HARD] ⇄ "easy,hard". An empty list drops the key. */
+export function toListParam(values: readonly string[]): string | null {
+  return values.length > 0 ? values.map(toParamValue).join(",") : null;
 }
+
+function enumListParam<const T extends readonly [string, ...string[]]>(values: T) {
+  const item = z.enum(values);
+  return z
+    .string()
+    .max(200)
+    .catch("")
+    .transform((raw) => {
+      const picked = new Set<string>();
+      for (const part of raw.split(",")) {
+        const parsed = item.safeParse(part.trim().toUpperCase().replaceAll("-", "_"));
+        if (parsed.success) picked.add(parsed.data);
+      }
+      // Canonical order without duplicates, so equivalent URLs parse to equal params.
+      return values.filter((value): value is T[number] => picked.has(value));
+    });
+}
+
+// Keys whose repeats (?tier=core&tier=rep) merge into one list instead of keeping the first.
+const LIST_KEYS = new Set(["difficulty", "tier", "status"]);
 
 // Every field falls back to its default instead of failing: a hand-edited URL should never 500.
 const schema = z.object({
   q: z.string().trim().max(100).catch(""),
   family: z.string().regex(/^\d{2}$/).optional().catch(undefined),
   pattern: z.string().regex(PATTERN_ID).optional().catch(undefined),
-  difficulty: enumParam(DIFFICULTIES),
-  tier: enumParam(TIERS),
-  status: enumParam(STATUS_FILTERS),
+  difficulty: enumListParam(DIFFICULTIES),
+  tier: enumListParam(TIERS),
+  status: enumListParam(STATUS_FILTERS),
   sort: z.enum(SORT_KEYS).catch("sheet"),
   dir: z.enum(["asc", "desc"]).catch("asc"),
   page: z.coerce.number().int().min(1).max(100_000).catch(1),
@@ -94,7 +114,9 @@ const viewSchema = z.object({
 });
 
 export function parseSheetParams(raw: RawSearchParams): SheetParams {
-  const flat = Object.fromEntries(Object.entries(raw).map(([key, value]) => [key, first(value)]));
+  const flat = Object.fromEntries(
+    Object.entries(raw).map(([key, value]) => [key, LIST_KEYS.has(key) && Array.isArray(value) ? value.join(",") : first(value)]),
+  );
   const parsed = schema.parse(flat);
   const pageSize = (PAGE_SIZES as readonly number[]).includes(parsed.pageSize)
     ? (parsed.pageSize as PageSize)
@@ -113,9 +135,10 @@ export function sheetHref(params: SheetLinkParams, overrides: Partial<SheetLinkP
   if (next.q) search.set("q", next.q);
   if (next.family) search.set("family", next.family);
   if (next.pattern) search.set("pattern", next.pattern);
-  if (next.difficulty) search.set("difficulty", toParamValue(next.difficulty));
-  if (next.tier) search.set("tier", toParamValue(next.tier));
-  if (next.status) search.set("status", toParamValue(next.status));
+  for (const key of ["difficulty", "tier", "status"] as const) {
+    const value = toListParam(next[key]);
+    if (value) search.set(key, value);
+  }
   if (next.sort !== "sheet") search.set("sort", next.sort);
   if (next.dir !== "asc") search.set("dir", next.dir);
   if (next.page > 1) search.set("page", String(next.page));
@@ -123,18 +146,22 @@ export function sheetHref(params: SheetLinkParams, overrides: Partial<SheetLinkP
   if (next.view && next.view !== "patterns") search.set("view", next.view);
   if (next.show && next.show !== "all") search.set("show", next.show);
   if (next.open && next.open.length > 0) search.set("open", next.open.join(","));
-  const query = search.toString();
+  const query = serializeQuery(search);
   return query ? `/sheet?${query}` : "/sheet";
 }
 
 export function hasActiveFilters(params: SheetParams): boolean {
-  return Boolean(params.q || params.family || params.pattern || params.difficulty || params.tier || params.status);
+  return countActiveFilters(params, { view: "list", show: "all" }) > 0;
 }
 
-/** How many filters narrow the current view. Sorting, paging and the view itself don't count. */
+/**
+ * How many filters narrow the current view. A multi-select counts once however many values it has;
+ * sorting, paging and the view itself don't count.
+ */
 export function countActiveFilters(params: SheetParams, { view, show }: Pick<SheetViewParams, "view" | "show">): number {
-  const problemFilters = [params.q, params.family, params.pattern, params.difficulty, params.tier, params.status].filter(Boolean).length;
-  return problemFilters + (view === "patterns" && show !== "all" ? 1 : 0);
+  const single = [params.q, params.family, params.pattern].filter(Boolean).length;
+  const multi = [params.difficulty, params.tier, params.status].filter((values) => values.length > 0).length;
+  return single + multi + (view === "patterns" && show !== "all" ? 1 : 0);
 }
 
 /** Page numbers to render, with "gap" where a run is elided: 1 … 4 5 6 7 8 … 38 */

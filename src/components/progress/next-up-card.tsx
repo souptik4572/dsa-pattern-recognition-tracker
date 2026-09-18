@@ -13,18 +13,20 @@ const REASON = {
   any: "Next untouched problem",
 } as const;
 
-export function NextUpCard({ nextUp }: { nextUp: NextUp }) {
+export function NextUpCard({ nextUp, scoped = false }: { nextUp: NextUp; /** Picked from filtered problems only. */ scoped?: boolean }) {
   if (!nextUp) {
     return (
       <Panel title="Next up">
-        <p className="text-sm text-ink-2">Every problem has a status. Go run a contest.</p>
+        <p className="text-sm text-ink-2">
+          {scoped ? "Every problem matching your filters has a status." : "Every problem has a status. Go run a contest."}
+        </p>
       </Panel>
     );
   }
 
   const { row, reason } = nextUp;
   return (
-    <Panel title="Next up" description={REASON[reason]}>
+    <Panel title="Next up" description={scoped ? `${REASON[reason]}, within your filters` : REASON[reason]}>
       <p className="font-mono text-xs text-ink-3">#{row.problem.id}</p>
       <a
         href={row.problem.leetcodeUrl}

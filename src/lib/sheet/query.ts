@@ -1,4 +1,4 @@
-import { isSolved, needsRevisit, type Status } from "@/lib/progress/status";
+import { isSolved, needsRevisit, type Status, type StatusFilter } from "@/lib/progress/status";
 import type { Difficulty, Tier } from "./meta";
 import type { SheetParams, SortKey } from "./search-params";
 
@@ -41,7 +41,7 @@ export type SheetQueryResult = {
 const DIFFICULTY_RANK: Record<Difficulty, number> = { EASY: 0, MEDIUM: 1, HARD: 2 };
 const TIER_RANK: Record<Tier, number> = { CORE: 0, REP: 1, BOSS: 2 };
 
-export function matchesStatus(status: Status, filter: SheetParams["status"]): boolean {
+export function matchesStatus(status: Status, filter: StatusFilter | undefined): boolean {
   switch (filter) {
     case undefined:
       return true;
@@ -72,9 +72,10 @@ export function matchesFilters(entry: FilterableEntry, status: Status, filters: 
   return (
     (!filters.family || entry.pattern.familyId === filters.family) &&
     (!filters.pattern || entry.pattern.id === filters.pattern) &&
-    (!filters.tier || entry.tier === filters.tier) &&
-    (!filters.difficulty || entry.problem.difficulty === filters.difficulty) &&
-    matchesStatus(status, filters.status) &&
+    // Multi-selects: any selected value matches, and an empty selection matches everything.
+    (filters.tier.length === 0 || filters.tier.includes(entry.tier)) &&
+    (filters.difficulty.length === 0 || filters.difficulty.includes(entry.problem.difficulty)) &&
+    (filters.status.length === 0 || filters.status.some((filter) => matchesStatus(status, filter))) &&
     matchesSearch(entry, filters.q.trim())
   );
 }

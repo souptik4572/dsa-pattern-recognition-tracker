@@ -19,12 +19,16 @@ and code solutions.
     - a "next up" suggestion;
     - a pattern mastery map.
 
-    Every count is a link that filters the problems below.
-  - **One toolbar:** search (`⌘K` / `Ctrl K`) plus family, pattern, difficulty, tier and status
-    filters, with an active-filter count and one-click clear. It all lives in the URL, so any view
+    Every count is a link that filters the problems below. When filters are set, every number on
+    the page (progress, tiles, breakdowns, next up, mastery map, family and pattern headers) covers
+    only the matching problems, and the panel names the filters with a link to show everything.
+  - **One toolbar:** search (`⌘K` / `Ctrl K`), family and pattern filters, and multi-select
+    difficulty, tier and status filters (e.g. Easy + Hard, or Needed help + Solved slowly). It shows
+    an active-filter count and has a one-click clear. It all lives in the URL, so any view
     can be shared or bookmarked.
   - **By pattern** (the default): families and their patterns as expandable panels. Each panel shows
-    the pattern's trigger, template, complexity, progress and problems. Patterns can also be
+    the pattern's trigger, template, complexity, progress and problems. Each family header has
+    Expand / Collapse buttons for its patterns, and the toolbar has Expand all / Collapse all. Patterns can also be
     filtered by overall progress.
   - **All problems:** every slot in one sortable, paginated table.
   - **Recognition drill:** read a trigger and name the pattern, in a pop-up over the sheet.

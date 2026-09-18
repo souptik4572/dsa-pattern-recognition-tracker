@@ -1,13 +1,13 @@
 import "server-only";
 import { cache } from "react";
 import { db } from "@/lib/db";
-import { matchesView, type PatternView } from "@/lib/patterns/views";
 import { pickNextUp } from "@/lib/progress/next-up";
 import { computeProgressStats, emptyCounts, type ProgressCounts, type ProgressStats } from "@/lib/progress/stats";
 import type { Status, StoredStatus } from "@/lib/progress/status";
-import { matchesFilters, querySheet, type ProblemFilters, type SheetEntry } from "@/lib/sheet/query";
+import { querySheet, type SheetEntry } from "@/lib/sheet/query";
 import type { PatternRef, ProblemRow } from "@/lib/sheet/rows";
-import type { SheetParams } from "@/lib/sheet/search-params";
+import { scopeEntries } from "@/lib/sheet/scope";
+import type { SheetParams, SheetViewParams } from "@/lib/sheet/search-params";
 import { getSheetCatalog } from "./catalog";
 
 // Pages combine the shared in-memory catalog with a single query for the user's own statuses.
@@ -85,14 +85,6 @@ async function loadForUser(userId: string) {
   return { catalog, progress, statusOf: statusReader(progress) };
 }
 
-export const getProgressStats = cache(async (userId: string): Promise<ProgressStats> => {
-  const { catalog, progress } = await loadForUser(userId);
-  return computeProgressStats(
-    catalog.facts,
-    new Map([...progress].map(([slotId, own]) => [slotId, own.status])),
-  );
-});
-
 export type SheetRow = ProblemRow & {
   updatedAt: Date | null;
   pattern: PatternRef;
@@ -130,20 +122,8 @@ export type SheetPage = {
   pageCount: number;
 };
 
-export async function getSheetPage(userId: string, params: SheetParams): Promise<SheetPage> {
-  const { catalog, progress, statusOf } = await loadForUser(userId);
-  const result = querySheet(catalog.entries, statusOf, params);
-  return {
-    rows: result.entries.map((entry) => toRow(entry, progress)),
-    total: result.total,
-    solved: result.solved,
-    page: result.page,
-    pageCount: result.pageCount,
-  };
-}
-
 // ---------------------------------------------------------------------------
-// Patterns page
+// The sheet page
 // ---------------------------------------------------------------------------
 
 export type PatternPanelData = {
@@ -153,9 +133,11 @@ export type PatternPanelData = {
   trigger: string;
   template: string;
   complexity: string;
-  /** Progress across all of the pattern's problems, regardless of filters. */
+  /** Progress over the pattern's problems in scope (all of them when nothing is filtered). */
   counts: ProgressCounts;
-  /** The pattern's problems that match the current filters, in sheet order. */
+  /** Every problem in the pattern, filtered or not. */
+  totalCount: number;
+  /** The pattern's problems in scope, in sheet order. */
   rows: ProblemRow[];
 };
 
@@ -167,23 +149,65 @@ export type PatternSectionData = {
   patterns: PatternPanelData[];
 };
 
-/**
- * Families and patterns with the problems matching the filters. A pattern is listed when at least
- * one of its problems matches and its overall progress fits the chosen view.
- */
-export async function getPatternSections(
-  userId: string,
-  { view, ...filters }: ProblemFilters & { view: PatternView },
-): Promise<PatternSectionData[]> {
-  const [{ catalog, progress, statusOf }, stats] = await Promise.all([loadForUser(userId), getProgressStats(userId)]);
+export type NextUp = { reason: "revisit" | "core" | "any"; row: SheetRow } | null;
 
-  return catalog.families.flatMap((family) => {
+export type SheetData = {
+  /** Progress over the problems in scope, broken down every way the page shows it. */
+  stats: ProgressStats;
+  /** The next problem to work on, chosen from the problems in scope. */
+  nextUp: NextUp;
+  /** Patterns view: families and patterns that have problems in scope. */
+  sections: PatternSectionData[] | null;
+  /** List view: the requested page of problems in scope. */
+  list: SheetPage | null;
+};
+
+/**
+ * Everything the sheet shows, computed from one scope (see scopeEntries) so that the progress
+ * panel, the mastery map, the headers and the results all describe the same problems.
+ */
+export async function getSheetData(
+  userId: string,
+  params: SheetParams,
+  { view, show }: Pick<SheetViewParams, "view" | "show">,
+): Promise<SheetData> {
+  const { catalog, progress, statusOf } = await loadForUser(userId);
+  const scope = scopeEntries(catalog.entries, statusOf, params, { view, show });
+
+  const stats = computeProgressStats(
+    scope.map((entry) => ({
+      id: entry.slotId,
+      patternId: entry.pattern.id,
+      familyId: entry.pattern.familyId,
+      tier: entry.tier,
+      difficulty: entry.problem.difficulty,
+    })),
+    new Map([...progress].map(([slotId, own]) => [slotId, own.status])),
+  );
+  const pick = pickNextUp(scope, statusOf);
+  const nextUp: NextUp = pick && { reason: pick.reason, row: toRow(pick.entry, progress) };
+
+  if (view === "list") {
+    const result = querySheet(catalog.entries, statusOf, params);
+    return {
+      stats,
+      nextUp,
+      sections: null,
+      list: {
+        rows: result.entries.map((entry) => toRow(entry, progress)),
+        total: result.total,
+        solved: result.solved,
+        page: result.page,
+        pageCount: result.pageCount,
+      },
+    };
+  }
+
+  const inScope = new Set(scope.map((entry) => entry.slotId));
+  const sections = catalog.families.flatMap((family) => {
     const patterns = family.patterns.flatMap((pattern) => {
-      const counts = stats.byPattern[pattern.id] ?? emptyCounts();
-      const rows = pattern.entries
-        .filter((entry) => matchesFilters(entry, statusOf(entry.slotId), filters))
-        .map((entry) => toProblemRow(entry, progress));
-      if (rows.length === 0 || !matchesView(counts, view)) return [];
+      const rows = pattern.entries.filter((entry) => inScope.has(entry.slotId));
+      if (rows.length === 0) return [];
       return [
         {
           id: pattern.id,
@@ -192,34 +216,17 @@ export async function getPatternSections(
           trigger: pattern.trigger,
           template: pattern.template,
           complexity: pattern.complexity,
-          counts,
-          rows,
+          counts: stats.byPattern[pattern.id] ?? emptyCounts(),
+          totalCount: pattern.entries.length,
+          rows: rows.map((entry) => toProblemRow(entry, progress)),
         },
       ];
     });
     if (patterns.length === 0) return [];
-    return [
-      {
-        id: family.id,
-        name: family.name,
-        why: family.why,
-        counts: stats.byFamily[family.id] ?? emptyCounts(),
-        patterns,
-      },
-    ];
+    return [{ id: family.id, name: family.name, why: family.why, counts: stats.byFamily[family.id] ?? emptyCounts(), patterns }];
   });
-}
 
-// ---------------------------------------------------------------------------
-// Dashboard helpers
-// ---------------------------------------------------------------------------
-
-export type NextUp = { reason: "revisit" | "core" | "any"; row: SheetRow } | null;
-
-export async function getNextUp(userId: string): Promise<NextUp> {
-  const { catalog, progress, statusOf } = await loadForUser(userId);
-  const pick = pickNextUp(catalog.entries, statusOf);
-  return pick && { reason: pick.reason, row: toRow(pick.entry, progress) };
+  return { stats, nextUp, sections, list: null };
 }
 
 /** Pattern triggers for the recognition drill. */

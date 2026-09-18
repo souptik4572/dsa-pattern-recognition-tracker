@@ -43,6 +43,13 @@ function add(counts: ProgressCounts, status: Status) {
   if (needsRevisit(status)) counts.revisit += 1;
 }
 
+/** Counts for any set of statuses, e.g. the problems left after filtering. */
+export function countStatuses(statuses: Iterable<Status>): ProgressCounts {
+  const counts = emptyCounts();
+  for (const status of statuses) add(counts, status);
+  return counts;
+}
+
 function recordOf<K extends string>(keys: readonly K[]): Record<K, ProgressCounts> {
   return Object.fromEntries(keys.map((key) => [key, emptyCounts()])) as Record<K, ProgressCounts>;
 }

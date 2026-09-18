@@ -14,6 +14,8 @@ export type MasteryCell = {
   pending: number;
   total: number;
   level: MasteryLevel;
+  /** False when filters are set and none of the pattern's problems match them. */
+  inScope: boolean;
 };
 
 export type MasteryRow = { id: string; name: string; patterns: MasteryCell[] };
@@ -26,6 +28,8 @@ const levelClass: Record<MasteryLevel, string> = {
   4: "bg-mastery-4",
 };
 
+const outOfScopeClass = "bg-transparent ring-1 ring-rule ring-inset";
+
 const LEVELS: MasteryLevel[] = [0, 1, 2, 3, 4];
 
 /**
@@ -35,6 +39,7 @@ const LEVELS: MasteryLevel[] = [0, 1, 2, 3, 4];
  */
 export function MasteryGrid({ rows }: { rows: MasteryRow[] }) {
   const [active, setActive] = useState<MasteryCell | null>(null);
+  const anyOutOfScope = rows.some((row) => row.patterns.some((cell) => !cell.inScope));
 
   return (
     <div>
@@ -49,14 +54,18 @@ export function MasteryGrid({ rows }: { rows: MasteryRow[] }) {
                 <Link
                   key={cell.id}
                   href={patternHref(cell.id)}
-                  aria-label={`${cell.id} ${cell.name}: ${cell.solved} of ${cell.total} solved, ${cell.pending} pending`}
+                  aria-label={
+                    cell.inScope
+                      ? `${cell.id} ${cell.name}: ${cell.solved} of ${cell.total} solved, ${cell.pending} pending`
+                      : `${cell.id} ${cell.name}: no problems match your filters`
+                  }
                   onPointerEnter={() => setActive(cell)}
                   onPointerLeave={() => setActive(null)}
                   onFocus={() => setActive(cell)}
                   onBlur={() => setActive(null)}
                   className={cn(
                     "size-5 rounded-[3px] transition-transform hover:scale-110 focus-visible:scale-110",
-                    levelClass[cell.level],
+                    cell.inScope ? levelClass[cell.level] : outOfScopeClass,
                   )}
                 />
               ))}
@@ -69,7 +78,13 @@ export function MasteryGrid({ rows }: { rows: MasteryRow[] }) {
         {active ? (
           <>
             <span className="font-mono font-semibold text-accent">{active.id}</span> {active.name} ·{" "}
-            <b className="text-ink tabular-nums">{active.solved}</b>/{active.total} solved · {active.pending} pending
+            {active.inScope ? (
+              <>
+                <b className="text-ink tabular-nums">{active.solved}</b>/{active.total} solved · {active.pending} pending
+              </>
+            ) : (
+              "no problems match your filters"
+            )}
           </>
         ) : (
           "Hover or focus a cell to see its pattern. Select it to open the pattern's problems."
@@ -83,6 +98,12 @@ export function MasteryGrid({ rows }: { rows: MasteryRow[] }) {
             {MASTERY_LABEL[level]}
           </li>
         ))}
+        {anyOutOfScope && (
+          <li className="flex items-center gap-1.5">
+            <span aria-hidden className={cn("size-2.5 rounded-[2px]", outOfScopeClass)} />
+            No matching problems
+          </li>
+        )}
       </ul>
     </div>
   );

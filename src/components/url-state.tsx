@@ -1,8 +1,9 @@
 "use client";
 
 import { usePathname, useRouter, useSearchParams } from "next/navigation";
-import { createContext, useCallback, useContext, useMemo, useTransition, type ReactNode } from "react";
+import { createContext, useCallback, useContext, useEffect, useMemo, useRef, useTransition, type ReactNode } from "react";
 import { cn } from "@/lib/cn";
+import { serializeQuery } from "@/lib/query-string";
 
 type Changes = Record<string, string | null>;
 
@@ -20,20 +21,30 @@ export function UrlStateProvider({ children }: { children: ReactNode }) {
   const pathname = usePathname();
   const searchParams = useSearchParams();
   const [isPending, startTransition] = useTransition();
+  const committed = serializeQuery(searchParams);
+
+  // useSearchParams only updates once a navigation has landed. Two quick changes (Easy, then Hard)
+  // would otherwise both build on the old URL and the first would be lost, so later changes build on
+  // the most recent requested query until the URL catches up.
+  const requested = useRef<string | null>(null);
+  useEffect(() => {
+    if (requested.current === committed) requested.current = null;
+  }, [committed]);
 
   const navigate = useCallback(
     (changes: Changes) => {
-      const next = new URLSearchParams(searchParams.toString());
+      const next = new URLSearchParams(requested.current ?? committed);
       for (const [key, value] of Object.entries(changes)) {
         if (value === null || value === "") next.delete(key);
         else next.set(key, value);
       }
       if (!("page" in changes)) next.delete("page");
 
-      const query = next.toString();
+      const query = serializeQuery(next);
+      requested.current = query;
       startTransition(() => router.replace(query ? `${pathname}?${query}` : pathname, { scroll: false }));
     },
-    [router, pathname, searchParams],
+    [router, pathname, committed],
   );
 
   const value = useMemo(() => ({ isPending, navigate }), [isPending, navigate]);

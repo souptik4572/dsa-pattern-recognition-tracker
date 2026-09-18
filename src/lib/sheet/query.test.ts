@@ -75,6 +75,15 @@ describe("querySheet", () => {
     expect(ids({ status: "revisit" })).toEqual(["1.1:15", "2.1:560"]);
   });
 
+  it("matches any selected value within a multi-select, and all filters together", () => {
+    expect(ids({ difficulty: "easy,hard" })).toEqual(["1.2:26", "2.1:1", "3.1:239"]);
+    expect(ids({ tier: "core,boss" })).toEqual(["1.1:167", "1.2:26", "2.1:560", "3.1:239"]);
+    expect(ids({ status: "needed-help,solved-slow" })).toEqual(["1.1:15", "2.1:560"]);
+    expect(ids({ status: "not-started,solved" })).toEqual(["1.1:167", "1.2:26", "2.1:560", "2.1:1", "3.1:239"]);
+    expect(ids({ difficulty: "easy,medium", tier: "rep" })).toEqual(["1.1:15", "2.1:1"]);
+    expect(ids({ difficulty: "easy,hard,medium" })).toHaveLength(entries.length);
+  });
+
   it("searches titles, pattern names, triggers and family names case-insensitively", () => {
     expect(ids({ q: "two sum" })).toEqual(["1.1:167", "2.1:1"]);
     expect(ids({ q: "SORTED ARRAY" })).toEqual(["1.1:167"]);
